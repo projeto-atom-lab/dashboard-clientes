@@ -7,7 +7,7 @@
 (function () {
 'use strict';
 
-var VERSION = '1.0.0';
+var VERSION = '1.14.0';
 var D = window.DASH || {};
 var ROOT = document.getElementById(D.elemento || 'dash');
 if (!ROOT) return;
@@ -831,7 +831,10 @@ container-type:inline-size;background:var(--background);color:var(--foreground);
 .acl .menu hr{border:0;border-top:1px solid var(--border);margin:4px 0;width:100%}\
 .acl .menu .custom{display:flex;flex-direction:column;gap:8px;padding:8px 12px 10px}\
 .acl .menu .custom .row{display:flex;gap:8px;align-items:center}\
-.acl .menu .custom #aclApply{justify-content:center;background:var(--primary);color:#fff;font-weight:600;min-height:36px}.acl .menu .custom #aclApply:hover{filter:brightness(1.05);background:var(--primary)}\
+.acl .menu .months{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;max-height:156px;overflow:auto}\
+.acl .menu .months .mo{min-height:32px;padding:4px 6px;justify-content:center;font-size:12.5px;border:1px solid var(--border);border-radius:var(--r-sm)}\
+.acl .menu .months .mo[aria-pressed=true]{background:var(--primary);color:#fff;border-color:var(--primary)}\
+.acl .menu .custom #aclCApply,.acl .menu .custom #aclApply{justify-content:center;background:var(--primary);color:#fff;font-weight:600;min-height:36px}.acl .menu .custom #aclApply:hover{filter:brightness(1.05);background:var(--primary)}\
 .acl .menu input[type=date]{flex:1;min-width:0;height:34px;border:1px solid var(--border);border-radius:var(--r-sm);padding:0 8px;font:inherit;font-size:13px;background:var(--card);color:var(--foreground)}\
 .acl .cmpline{margin:0;font-size:12px;line-height:16px;color:var(--muted-foreground);font-variant-numeric:tabular-nums}\
 .acl .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}\
@@ -965,24 +968,24 @@ function reportHeight() {
 var PRESETS = [['7', '7 dias'], ['14', '14 dias'], ['30', '30 dias'], ['mtd', 'Este mês'], ['lastmonth', 'Mês passado']];
 function periodFor(k) { var old = STATE.preset; STATE.preset = k; var p = resolvePeriod(); STATE.preset = old; return p; }
 function presetLabel() { var p = PRESETS.filter(function (x) { return x[0] === STATE.preset; })[0]; return p ? p[1] : 'Período escolhido'; }
-function rangeTxt(a, b) { return fmtD(a) + ' a ' + fmtD(b); }
+function rangeTxt(a, b) { var y = String(new Date().getFullYear()); return fmtD(a, a.slice(0, 4) !== y) + ' a ' + fmtD(b, b.slice(0, 4) !== y); }
 
 /* ============================== CLIENTE: BLOCOS DE NEGÓCIO ============================== */
 function chg(c, p) { if (!ok(c) || !ok(p) || p === 0) return null; var r = c / p - 1; return { v: r, p: Math.round(Math.abs(r) * 100), dir: r >= 0 ? 'up' : 'down' }; }
 function varLine(c, p, prevTxt, mode) {
   // mode: 'neutral' | 'more' (mais é melhor) | 'less' (menos é melhor)
   var d = chg(c, p); if (!d) return '';
-  if (d.p === 0) return '<span class="var neu">Igual ao período anterior</span>';
+  if (d.p === 0) return '<span class="var neu">Igual ao período comparado</span>';
   var good = mode === 'less' ? d.dir === 'down' : d.dir === 'up';
   var cls = mode === 'neutral' ? 'neu' : (good ? 'upc' : 'dn');
-  return '<span class="var" title="Comparado com a média por dia do período anterior">' + ic(d.dir, cls) + '<span class="num ' + cls + '">' + d.p + '%</span><span class="neu num">(' + prevTxt + ')</span></span>';
+  return '<span class="var" title="Comparado com a média por dia do período comparado">' + ic(d.dir, cls) + '<span class="num ' + cls + '">' + d.p + '%</span><span class="neu num">(' + prevTxt + ')</span></span>';
 }
 function blk(k, val, sub, varHtml, cls) {
   return '<div class="blk' + (cls ? ' ' + cls : '') + '"><span class="k">' + k + '</span><span class="v num' + (val === '—' ? ' dash' : '') + '">' + val + '</span><span class="s num">' + sub + '</span>' + (varHtml || '') + '</div>';
 }
 function connHtml(lbl, val, d, good, ptext) {
   return '<div class="conn">' + (lbl ? '<span class="lbl">' + lbl + '</span>' : '') + '<span class="cv num">' + val + '</span>' +
-    (d ? '<span class="cs">' + ic(d.dir, good ? 'ok' : 'bad') + '<span class="num">' + d + '</span><span class="sr">, ' + (good ? 'melhor' : 'pior') + ' que no período anterior</span></span>' : '') +
+    (d ? '<span class="cs">' + ic(d.dir, good ? 'ok' : 'bad') + '<span class="num">' + d + '</span><span class="sr">, ' + (good ? 'melhor' : 'pior') + ' que no período comparado</span></span>' : '') +
     (ptext ? '<span class="cp num">' + ptext + '</span>' : '') + '</div>';
 }
 function connCost(cost, pCost) {
@@ -1016,12 +1019,12 @@ function heroHTML(per) {
       var cpr = c > 0 ? F.cur.spend / c : null, ppr = p > 0 ? F.prev.spend / p : null;
       var sub = cpr ? '<b>' + money(cpr) + '</b> cada' : 'sem resultado no período';
       if (isSale(f) && F.cur.revenue > 0 && (!SALE_TYPES[f] || SALE_TYPES[f].receita)) sub += ' · ' + money(F.cur.revenue) + ' vendidos';
-      var vl = cpr && ppr ? varLine(cpr, ppr, money(ppr), 'less').replace('<span class="var"', '<span class="var" title="Custo por resultado comparado com o período anterior"') : varLine(c / L1, p / L0, perDay(p / L0) + '/dia', 'more');
+      var vl = cpr && ppr ? varLine(cpr, ppr, money(ppr), 'less').replace('<span class="var"', '<span class="var" title="Custo por resultado comparado com o período de comparação"') : varLine(c / L1, p / L0, perDay(p / L0) + '/dia', 'more');
       h += blk(FNAME(f), count(c), sub, vl);
     });
     var outros = agg(filtered(per.from, per.to, function (r) { return r.funnel === 'outros' || r.funnel === 'trafego'; })).spend;
     if (outros > 0) notes.push('Inclui ' + money(outros) + ' em campanhas de alcance e engajamento, que não geram resultados contáveis.');
-    notes.push('Nos resultados, a variação compara o custo de cada um com o período anterior.');
+    notes.push('Nos resultados, a variação compara o custo de cada um com o período comparado.');
     return { html: '<div class="flow res">' + h + '</div>', notes: notes };
   }
   // modo contatos: Investido > Contatos > Qualificados > Vendas
@@ -1059,33 +1062,89 @@ function heroHTML(per) {
   return { html: '<div class="flow">' + h2 + '</div>', notes: notes };
 }
 
-/* ============================== CLIENTE: EVOLUÇÃO POR MÊS ============================== */
+/* ============================== CLIENTE: COMPARAÇÃO ============================== */
+/* O cliente escolhe com o que comparar: o período anterior equivalente (padrão),
+   o mesmo período do ano passado (quando houver dados), um mês específico ou
+   datas livres. A escolha vale para o relatório inteiro. */
+STATE.cmp = store.get('cmp', { k: 'prev' });
+function shiftYear(iso, n) {
+  var y = +iso.slice(0, 4) + n, md = iso.slice(5);
+  if (md === '02-29') md = '02-28';
+  return y + '-' + md;
+}
+function hasData(from, to) { return STATE.rows.some(function (r) { return r.date >= from && r.date <= to && r.spend > 0; }); }
+function cmpRange(p) {
+  var c = STATE.cmp || { k: 'prev' };
+  if (c.k === 'yoy') return { from: shiftYear(p.from, -1), to: shiftYear(p.to, -1) };
+  if (c.k === 'month' && c.m) return { from: c.m + '-01', to: monthEnd(c.m + '-01') };
+  if (c.k === 'custom' && c.from && c.to) return { from: c.from, to: c.to };
+  return null;
+}
+var _resolveBase = resolvePeriod;
+resolvePeriod = function () {
+  var p = _resolveBase(), c = cmpRange(p);
+  if (c) { p.pFrom = c.from; p.pTo = c.to; p.pLen = daysBetween(c.from, c.to) + 1; }
+  return p;
+};
+function monthName(ym, short) { var m = +ym.slice(5, 7) - 1, y = ym.slice(0, 4); return short ? MES[m] + '/' + y.slice(2) : MESL[m] + ' de ' + y; }
+function cmpLabel(per) {
+  var c = STATE.cmp || { k: 'prev' };
+  if (c.k === 'yoy') return 'Mesmo período do ano passado';
+  if (c.k === 'month' && c.m) return monthName(c.m);
+  if (c.k === 'custom' && c.from) return 'Datas escolhidas';
+  return 'Período anterior';
+}
+function dataMonths() {
+  var set = {}; STATE.rows.forEach(function (r) { if (r.spend > 0) set[r.date.slice(0, 7)] = 1; });
+  return Object.keys(set).sort().reverse();
+}
+
+/* ============================== CLIENTE: EVOLUÇÃO ============================== */
 var MES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 var MESL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-var EVO = { metric: 'custo', table: false, f: null };
+var EVO = { metric: 'custo', table: false, f: null, gran: store.get('gran', null) };
 function evoGroups() {
   var fs = bizFunnels();
   if (!fs.length) return [];
   if (!fs.some(isSale)) return [{ k: 'contatos', n: 'Contatos', one: 'contato', many: 'contatos', fs: fs }];
   return fs.map(function (f) { return { k: f, n: FNAME(f), one: RNAME(f, false), many: RNAME(f), fs: [f] }; });
 }
-function monthSeries(G, year) {
-  var last = lastDataDate() || todayISO(), out = { custo: [], dia: [], spend: [], n: [] };
-  for (var m = 0; m < 12; m++) {
-    var from = year + '-' + p2(m + 1) + '-01', to = monthEnd(from);
-    if (from > last) { out.custo.push(null); out.dia.push(null); out.spend.push(null); out.n.push(null); continue; }
-    var end = to > last ? last : to, days = daysBetween(from, end) + 1;
-    var sp = 0, n = 0;
-    STATE.rows.forEach(function (r) {
-      if (r.date < from || r.date > end || G.fs.indexOf(r.funnel) < 0 || !unitOk(r.campaign)) return;
-      sp += r.spend; n += r[RESULT(r.funnel)] || 0;
-    });
-    var has = sp > 0 || n > 0;
-    out.spend.push(has ? sp : null); out.n.push(has ? n : null);
-    out.custo.push(has && n > 0 ? sp / n : null);
-    out.dia.push(has ? n / days : null);
+function monthsTouched(from, to) { return (+to.slice(0, 4) - +from.slice(0, 4)) * 12 + (+to.slice(5, 7) - +from.slice(5, 7)) + 1; }
+function canMonthly(per) { return monthsTouched(per.from, per.to) >= 2 || monthsTouched(per.pFrom, per.pTo) >= 2; }
+function granOf(per) { if (!canMonthly(per)) return 'dia'; return EVO.gran || (monthsTouched(per.from, per.to) >= 3 ? 'mes' : 'dia'); }
+/* Pontos de um intervalo: um por dia ou um por mês (meses cortados nas bordas
+   do intervalo e no último dia com dados, com a média por dia para que meses
+   incompletos possam ser comparados). */
+function seriesFor(G, from, to, gran) {
+  var last = lastDataDate() || todayISO(), byDate = {};
+  STATE.rows.forEach(function (r) {
+    if (r.date < from || r.date > to || G.fs.indexOf(r.funnel) < 0 || !unitOk(r.campaign)) return;
+    var x = byDate[r.date] || (byDate[r.date] = { s: 0, n: 0 }); x.s += r.spend; x.n += r[RESULT(r.funnel)] || 0;
+  });
+  var pts = [];
+  if (gran === 'dia') {
+    for (var d = from; d <= to; d = addDays(d, 1)) {
+      var x = byDate[d], fut = d > last;
+      pts.push({ lbl: fmtD(d), full: fmtD(d, 1), s: fut ? null : (x ? x.s : 0), n: fut ? null : (x ? x.n : 0), days: 1, partial: false, fut: fut });
+    }
+  } else {
+    var ms = monthStart(from);
+    while (ms <= to) {
+      var a = ms < from ? from : ms, b = monthEnd(ms) > to ? to : monthEnd(ms), bEff = b > last ? last : b;
+      var s = 0, n = 0;
+      if (a <= bEff) for (var dd = a; dd <= bEff; dd = addDays(dd, 1)) { var y = byDate[dd]; if (y) { s += y.s; n += y.n; } }
+      var ym = ms.slice(0, 7), fut2 = a > last;
+      pts.push({ lbl: monthName(ym, true), full: monthName(ym) + (a !== ms || b !== monthEnd(ms) ? ' (' + fmtD(a) + ' a ' + fmtD(b) + ')' : ''), s: fut2 ? null : s, n: fut2 ? null : n,
+        days: fut2 ? null : daysBetween(a, bEff) + 1, partial: !fut2 && (bEff < monthEnd(ms) || a > ms), fut: fut2 });
+      ms = addDays(monthEnd(ms), 1);
+    }
   }
-  return out;
+  return pts;
+}
+function valOf(pt, metric, gran) {
+  if (!pt || pt.fut || pt.s == null) return null;
+  if (metric === 'custo') return pt.n > 0 ? pt.s / pt.n : null;
+  return gran === 'dia' ? pt.n : (pt.days ? pt.n / pt.days : null);
 }
 function axisOf(maxVal) {
   if (!(maxVal > 0)) return { step: 1, max: 4 };
@@ -1093,81 +1152,97 @@ function axisOf(maxVal) {
   var step = cand.filter(function (x) { return x >= maxVal / 4; })[0] || cand[4];
   return { step: step, max: Math.ceil(maxVal / step) * step };
 }
-function evoHTML() {
+function evoData(per) {
+  var GS = evoGroups(), G = GS.filter(function (g) { return g.k === EVO.f; })[0] || GS[0], gran = granOf(per);
+  var A = seriesFor(G, per.from, per.to, gran), B = seriesFor(G, per.pFrom, per.pTo, gran);
+  var n = Math.max(A.length, B.length), a = [], b = [];
+  /* Diário: acumulado desde o 1º dia, para comparar o andamento dos dois
+     períodos (dia a dia, um custo isolado oscila demais e some nos dias sem
+     resultado). Mensal: o valor de cada mês. */
+  function acc(P) {
+    var s = 0, k = 0;
+    return P.map(function (pt) {
+      if (!pt || pt.fut || pt.s == null) return null;
+      s += pt.s; k += pt.n;
+      return EVO.metric === 'custo' ? (k > 0 ? s / k : null) : k;
+    });
+  }
+  if (gran === 'dia') { a = acc(A); b = acc(B); while (a.length < n) a.push(null); while (b.length < n) b.push(null); }
+  else for (var i = 0; i < n; i++) { a.push(valOf(A[i], EVO.metric, gran)); b.push(valOf(B[i], EVO.metric, gran)); }
+  var countLbl = gran === 'dia' ? cap(G.many) + ' acumulados' : cap(G.many) + ' por dia (média do mês)';
+  return { G: G, gran: gran, A: A, B: B, a: a, b: b, n: n,
+    fmt: EVO.metric === 'custo' ? money : function (v) { return perDay(v); },
+    good: function (p) { return EVO.metric === 'custo' ? p <= 0 : p >= 0; },
+    label: EVO.metric === 'custo' ? 'Custo por ' + G.one + (gran === 'dia' ? ' acumulado' : '') : countLbl };
+}
+function evoHTML(per) {
   var GS = evoGroups(); if (!GS.length) return '';
   if (!EVO.f || !GS.some(function (g) { return g.k === EVO.f; })) EVO.f = GS[0].k;
-  var G = GS.filter(function (g) { return g.k === EVO.f; })[0];
-  var h = '<section class="sec" aria-labelledby="h-evo"><div class="sec-head"><div class="t"><span class="section-label">Evolução do trabalho</span><h2 id="h-evo">Este ano contra o ano passado</h2></div>' +
-    '<span class="badge plain">' + ic('info') + 'Fixo: não muda com o período</span></div><div class="panel"><div class="toolbar">';
+  var G = GS.filter(function (g) { return g.k === EVO.f; })[0], gran = granOf(per);
+  var h = '<section class="sec" aria-labelledby="h-evo"><div class="sec-head"><div class="t"><span class="section-label">Evolução</span><h2 id="h-evo">' + (gran === 'dia' ? 'Andamento dia a dia' : 'Mês a mês') + ', comparado com ' + esc(cmpLabel(per).toLowerCase()) + '</h2></div>' +
+    '<span class="badge plain">' + ic('cal') + '<span class="num">' + rangeTxt(per.from, per.to) + ' × ' + rangeTxt(per.pFrom, per.pTo) + '</span></span></div><div class="panel"><div class="toolbar">';
   if (GS.length > 1) h += '<div class="seg" role="group" aria-label="Resultado">' + GS.map(function (g) { return '<button type="button" data-evof="' + g.k + '" aria-pressed="' + (g.k === EVO.f) + '">' + esc(g.n) + '</button>'; }).join('') + '</div>';
-  h += '<div class="seg" role="group" aria-label="Métrica"><button type="button" data-evom="custo" aria-pressed="' + (EVO.metric === 'custo') + '">Custo por ' + esc(G.one) + '</button><button type="button" data-evom="dia" aria-pressed="' + (EVO.metric === 'dia') + '">' + esc(cap(G.many)) + ' por dia</button></div>' +
-    '<div class="spacer"></div><button class="btn-outline" type="button" id="aclView">' + ic(EVO.table ? 'chart' : 'table') + '<span>' + (EVO.table ? 'Ver gráfico' : 'Ver tabela') + '</span></button></div>' +
+  h += '<div class="seg" role="group" aria-label="Métrica"><button type="button" data-evom="custo" aria-pressed="' + (EVO.metric === 'custo') + '">Custo por ' + esc(G.one) + '</button><button type="button" data-evom="dia" aria-pressed="' + (EVO.metric === 'dia') + '">' + esc(cap(G.many)) + '</button></div>';
+  if (canMonthly(per)) h += '<div class="seg" role="group" aria-label="Agrupar por"><button type="button" data-evog="dia" aria-pressed="' + (gran === 'dia') + '">Diário</button><button type="button" data-evog="mes" aria-pressed="' + (gran === 'mes') + '">Mensal</button></div>';
+  h += '<div class="spacer"></div><button class="btn-outline" type="button" id="aclView">' + ic(EVO.table ? 'chart' : 'table') + '<span>' + (EVO.table ? 'Ver gráfico' : 'Ver tabela') + '</span></button></div>' +
     '<div class="legend" id="aclLegend"' + (EVO.table ? ' hidden' : '') + '></div><div class="chartbox" id="aclPlot" style="margin-top:12px"' + (EVO.table ? ' hidden' : '') + '></div><div class="tablewrap" id="aclTbl"' + (EVO.table ? '' : ' hidden') + '></div>' +
     '<div class="fixed-note" id="aclEvoNote"></div></div></section>';
   return h;
 }
-function evoData() {
-  var GS = evoGroups(), G = GS.filter(function (g) { return g.k === EVO.f; })[0] || GS[0];
-  var last = lastDataDate() || todayISO(), Y = +last.slice(0, 4), cm = +last.slice(5, 7) - 1;
-  var A = monthSeries(G, Y), B = monthSeries(G, Y - 1);
-  var a = A[EVO.metric], b = B[EVO.metric];
-  var fmt = EVO.metric === 'custo' ? money : function (v) { return perDay(v); };
-  var good = function (p) { return EVO.metric === 'custo' ? p <= 0 : p >= 0; };
-  var delta = function (p) {
-    var q = Math.abs(p);
-    if (EVO.metric === 'custo') return p <= 0 ? q + '% mais barato que em ' + (Y - 1) : q + '% mais caro que em ' + (Y - 1);
-    return p >= 0 ? q + '% a mais que em ' + (Y - 1) : q + '% a menos que em ' + (Y - 1);
-  };
-  return { G: G, Y: Y, cm: cm, a: a, b: b, fmt: fmt, good: good, delta: delta, hasPrev: b.some(ok), label: EVO.metric === 'custo' ? 'Custo por ' + G.one : cap(G.many) + ' por dia' };
-}
 function drawEvo() {
   var box = $('#aclPlot'); if (!box || box.hidden) return;
-  var E = evoData(), a = E.a, b = E.b;
+  var per = resolvePeriod(), E = evoData(per), a = E.a, b = E.b, n = E.n;
   var vals = a.concat(b).filter(ok), ax = axisOf((vals.length ? Math.max.apply(null, vals) : 1) * 1.08);
-  var w = Math.max(280, box.clientWidth || 800), hgt = w < 520 ? 250 : 320, m = { t: 16, r: 44, b: 28, l: w < 520 ? 52 : 64 };
+  var w = Math.max(280, box.clientWidth || 800), hgt = w < 520 ? 250 : 320, m = { t: 16, r: 24, b: 28, l: w < 520 ? 52 : 64 };
   var iw = w - m.l - m.r, ih = hgt - m.t - m.b;
-  var X = function (i) { return m.l + iw * (i / 11); }, Yp = function (v) { return m.t + ih * (1 - v / ax.max); };
+  var X = function (i) { return n <= 1 ? m.l + iw / 2 : m.l + iw * (i / (n - 1)); }, Yp = function (v) { return m.t + ih * (1 - v / ax.max); };
   var tick = EVO.metric === 'custo' ? function (t) { return t === 0 ? '0' : moneyShort(t); } : function (t) { return nf(t, t < 10 && t % 1 ? 1 : 0); };
-  var s = '<svg viewBox="0 0 ' + w + ' ' + hgt + '" width="' + w + '" height="' + hgt + '" role="img" aria-label="' + esc(E.label) + ' por mês. Use Ver tabela para ler os valores.">';
+  var s = '<svg viewBox="0 0 ' + w + ' ' + hgt + '" width="' + w + '" height="' + hgt + '" role="img" aria-label="' + esc(E.label) + '. Use Ver tabela para ler os valores.">';
   for (var t = 0; t <= ax.max + 1e-9; t += ax.step) {
     s += '<line x1="' + m.l + '" x2="' + (w - m.r) + '" y1="' + Yp(t) + '" y2="' + Yp(t) + '" stroke="var(--border)"' + (t === 0 ? '' : ' stroke-dasharray="2 4"') + '/>' +
       '<text x="' + (m.l - 8) + '" y="' + (Yp(t) + 4) + '" text-anchor="end" font-size="11" fill="var(--muted-foreground)" style="font-variant-numeric:tabular-nums">' + tick(t) + '</text>';
   }
-  MES.forEach(function (n, i) { s += '<text x="' + X(i) + '" y="' + (hgt - 8) + '" text-anchor="middle" font-size="11" fill="var(--muted-foreground)">' + n + '</text>'; });
+  var every = Math.max(1, Math.ceil(n / (w < 520 ? 5 : 10)));
+  for (var i = 0; i < n; i++) {
+    if (i % every !== 0 && i !== n - 1) continue;
+    var lb = E.gran === 'dia' ? 'Dia ' + (i + 1) : (E.A[i] ? E.A[i].lbl : (E.B[i] ? E.B[i].lbl : ''));
+    s += '<text x="' + X(i) + '" y="' + (hgt - 8) + '" text-anchor="' + (n > 1 && i === 0 ? 'start' : n > 1 && i === n - 1 ? 'end' : 'middle') + '" font-size="11" fill="var(--muted-foreground)">' + lb + '</text>';
+  }
   function path(arr, upto) {
     var d = '', on = false;
     arr.forEach(function (v, i) { if (upto != null && i > upto) return; if (!ok(v)) { on = false; return; } d += (on ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Yp(v).toFixed(1) + ' '; on = true; });
     return d;
   }
-  if (E.hasPrev) s += '<path d="' + path(b) + '" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-dasharray="5 4" stroke-linecap="round" stroke-linejoin="round"/>';
-  var cm = E.cm, solidTo = cm - 1;
-  var solid = path(a, solidTo);
-  // área sob os meses fechados
-  var idx = []; a.forEach(function (v, i) { if (ok(v) && i <= solidTo) idx.push(i); });
+  s += '<path d="' + path(b) + '" fill="none" stroke="var(--muted-foreground)" stroke-width="2" stroke-dasharray="5 4" stroke-linecap="round" stroke-linejoin="round"/>';
+  // último ponto do período atual pontilhado quando o mês ainda está em andamento
+  var lastIdx = -1; a.forEach(function (v, i) { if (ok(v)) lastIdx = i; });
+  var openLast = E.gran === 'mes' && lastIdx > 0 && E.A[lastIdx] && E.A[lastIdx].partial;
+  var solidTo = openLast ? lastIdx - 1 : lastIdx;
+  var solid = path(a, solidTo), idx = [];
+  a.forEach(function (v, i) { if (ok(v) && i <= solidTo) idx.push(i); });
   if (idx.length > 1) s += '<path d="' + solid + 'L' + X(idx[idx.length - 1]) + ' ' + Yp(0) + ' L' + X(idx[0]) + ' ' + Yp(0) + ' Z" fill="var(--primary)" opacity="0.08"/>';
   s += '<path d="' + solid + '" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>';
-  if (ok(a[cm])) {
-    if (cm > 0 && ok(a[cm - 1])) s += '<path d="M' + X(cm - 1) + ' ' + Yp(a[cm - 1]) + ' L' + X(cm) + ' ' + Yp(a[cm]) + '" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-dasharray="1 5" stroke-linecap="round"/>';
-    s += '<circle cx="' + X(cm) + '" cy="' + Yp(a[cm]) + '" r="5" fill="var(--card)" stroke="var(--primary)" stroke-width="2.5"/>';
-    s += '<text x="' + (X(cm) + 10) + '" y="' + (Yp(a[cm]) + 4) + '" font-size="12" font-weight="600" fill="var(--foreground)">' + E.Y + '</text>';
-  }
-  a.forEach(function (v, i) { if (ok(v) && i < cm) s += '<circle cx="' + X(i) + '" cy="' + Yp(v) + '" r="3" fill="var(--primary)"/>'; });
-  if (E.hasPrev) { var li = -1; b.forEach(function (v, i) { if (ok(v)) li = i; }); if (li > -1) s += '<text x="' + (X(li) + 8) + '" y="' + (Yp(b[li]) + 4) + '" font-size="12" font-weight="600" fill="var(--muted-foreground)">' + (E.Y - 1) + '</text>'; }
+  if (openLast && ok(a[lastIdx - 1])) s += '<path d="M' + X(lastIdx - 1) + ' ' + Yp(a[lastIdx - 1]) + ' L' + X(lastIdx) + ' ' + Yp(a[lastIdx]) + '" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-dasharray="1 5" stroke-linecap="round"/>';
+  if (E.gran === 'mes' || n <= 45) a.forEach(function (v, i) { if (ok(v)) s += '<circle cx="' + X(i) + '" cy="' + Yp(v) + '" r="' + (i === lastIdx && openLast ? 5 : 3) + '" fill="' + (i === lastIdx && openLast ? 'var(--card)' : 'var(--primary)') + '"' + (i === lastIdx && openLast ? ' stroke="var(--primary)" stroke-width="2.5"' : '') + '/>'; });
   s += '<line id="aclX" y1="' + m.t + '" y2="' + (m.t + ih) + '" stroke="var(--muted-foreground)" visibility="hidden"/><circle id="aclH0" r="4.5" fill="var(--card)" stroke="var(--muted-foreground)" stroke-width="2" visibility="hidden"/><circle id="aclH1" r="4.5" fill="var(--primary)" stroke="var(--card)" stroke-width="2" visibility="hidden"/>' +
     '<rect id="aclHit" x="' + (m.l - 12) + '" y="' + m.t + '" width="' + (iw + 24) + '" height="' + ih + '" fill="transparent"/></svg><div class="tip" id="aclTip" hidden></div>';
   box.innerHTML = s;
   var svg = box.querySelector('svg'), tip = $('#aclTip'), cross = $('#aclX'), h0 = $('#aclH0'), h1 = $('#aclH1');
   function show(e) {
-    var r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (w / (r.width || w)), i = Math.max(0, Math.min(11, Math.round((px - m.l) / iw * 11)));
+    var r = svg.getBoundingClientRect(), px = (e.clientX - r.left) * (w / (r.width || w)), i = n <= 1 ? 0 : Math.max(0, Math.min(n - 1, Math.round((px - m.l) / iw * (n - 1))));
     var v1 = a[i], v0 = b[i];
     if (!ok(v1) && !ok(v0)) return hide();
     cross.setAttribute('x1', X(i)); cross.setAttribute('x2', X(i)); cross.setAttribute('visibility', 'visible');
     if (ok(v0)) { h0.setAttribute('cx', X(i)); h0.setAttribute('cy', Yp(v0)); h0.setAttribute('visibility', 'visible'); } else h0.setAttribute('visibility', 'hidden');
     if (ok(v1)) { h1.setAttribute('cx', X(i)); h1.setAttribute('cy', Yp(v1)); h1.setAttribute('visibility', 'visible'); } else h1.setAttribute('visibility', 'hidden');
-    var html = '<b>' + MESL[i] + '</b>';
-    if (ok(v1)) html += '<div class="r"><span><i class="sw" style="background:var(--primary)"></i>' + E.Y + (i === E.cm ? ' (em andamento)' : '') + '</span><b class="num">' + E.fmt(v1) + '</b></div>';
-    if (ok(v0)) html += '<div class="r"><span><i class="sw" style="background:var(--muted-foreground)"></i>' + (E.Y - 1) + '</span><b class="num">' + E.fmt(v0) + '</b></div>';
-    if (ok(v1) && ok(v0) && v0 > 0) { var p = Math.round((v1 / v0 - 1) * 100); html += '<div class="d" style="color:' + (E.good(p) ? 'var(--success)' : 'var(--warning)') + '">' + E.delta(p) + '</div>'; }
+    var html = '<b>' + E.label + '</b>';
+    if (E.A[i]) html += '<div class="r"><span><i class="sw" style="background:var(--primary)"></i>' + E.A[i].full + (E.A[i].partial ? ' · em andamento' : '') + '</span><b class="num">' + (ok(v1) ? E.fmt(v1) : '—') + '</b></div>';
+    if (E.B[i]) html += '<div class="r"><span><i class="sw" style="background:var(--muted-foreground)"></i>' + E.B[i].full + '</span><b class="num">' + (ok(v0) ? E.fmt(v0) : '—') + '</b></div>';
+    if (ok(v1) && ok(v0) && v0 > 0) {
+      var p = Math.round((v1 / v0 - 1) * 100), q = Math.abs(p);
+      var txt = EVO.metric === 'custo' ? (p <= 0 ? q + '% mais barato' : q + '% mais caro') : (p >= 0 ? q + '% a mais' : q + '% a menos');
+      html += '<div class="d" style="color:' + (E.good(p) ? 'var(--success)' : 'var(--warning)') + '">' + (p === 0 ? 'Igual' : txt) + '</div>';
+    }
     tip.innerHTML = html; tip.hidden = false;
     var tw = tip.offsetWidth, left = X(i) + 14; if (left + tw > w) left = X(i) - tw - 14;
     tip.style.left = Math.max(0, left) + 'px'; tip.style.top = (m.t + 4) + 'px';
@@ -1178,20 +1253,19 @@ function drawEvo() {
 }
 function fillEvo() {
   if (!$('#aclEvoNote')) return;
-  var E = evoData();
-  $('#aclLegend').innerHTML = '<span><svg viewBox="0 0 24 8"><line x1="0" y1="4" x2="24" y2="4" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round"/></svg>' + E.Y + '</span>' +
-    (E.hasPrev ? '<span><svg viewBox="0 0 24 8"><line x1="0" y1="4" x2="24" y2="4" stroke="var(--muted-foreground)" stroke-width="2" stroke-dasharray="5 4" stroke-linecap="round"/></svg>' + (E.Y - 1) + '</span>' : '') +
-    '<span class="hint">' + MESL[E.cm] + ' de ' + E.Y + ' está em andamento</span>';
-  var rows = MES.map(function (n, i) {
+  var per = resolvePeriod(), E = evoData(per);
+  $('#aclLegend').innerHTML = '<span><svg viewBox="0 0 24 8"><line x1="0" y1="4" x2="24" y2="4" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round"/></svg>' + presetLabel() + ' <span class="hint num">' + rangeTxt(per.from, per.to) + '</span></span>' +
+    '<span><svg viewBox="0 0 24 8"><line x1="0" y1="4" x2="24" y2="4" stroke="var(--muted-foreground)" stroke-width="2" stroke-dasharray="5 4" stroke-linecap="round"/></svg>' + esc(cmpLabel(per)) + ' <span class="hint num">' + rangeTxt(per.pFrom, per.pTo) + '</span></span>';
+  var rows = '';
+  for (var i = 0; i < E.n; i++) {
     var v1 = E.a[i], v0 = E.b[i], d = '—';
     if (ok(v1) && ok(v0) && v0 > 0) { var p = Math.round((v1 / v0 - 1) * 100); d = (p > 0 ? '+' : '') + p + '%'; }
-    if (!ok(v1) && !ok(v0)) return '';
-    return '<tr><td>' + MESL[i] + (i === E.cm ? ' (em andamento)' : '') + '</td>' + (E.hasPrev ? '<td class="n">' + (ok(v0) ? E.fmt(v0) : '—') + '</td>' : '') + '<td class="n">' + (ok(v1) ? E.fmt(v1) : '—') + '</td>' + (E.hasPrev ? '<td class="n">' + d + '</td>' : '') + '</tr>';
-  }).join('');
-  $('#aclTbl').innerHTML = '<table><thead><tr><th>Mês</th>' + (E.hasPrev ? '<th class="n">' + (E.Y - 1) + '</th>' : '') + '<th class="n">' + E.Y + '</th>' + (E.hasPrev ? '<th class="n">Variação</th>' : '') + '</tr></thead><tbody>' + rows + '</tbody></table>';
-  var first = null; STATE.rows.forEach(function (r) { if (!first || r.date < first) first = r.date; });
-  $('#aclEvoNote').innerHTML = ic('info') + '<span>' + (E.hasPrev ? 'Meses sem investimento ficam em branco.' : 'Ainda não há dados de ' + (E.Y - 1) + ' nas planilhas: a comparação aparece quando o histórico existir.') +
-    (first ? ' Histórico disponível desde ' + fmtD(first, 1) + '.' : '') + ' O mês atual aparece pontilhado porque ainda está em andamento.</span>';
+    rows += '<tr><td>' + (E.A[i] ? E.A[i].full : '—') + '</td><td class="n">' + (ok(v1) ? E.fmt(v1) : '—') + '</td><td>' + (E.B[i] ? E.B[i].full : '—') + '</td><td class="n">' + (ok(v0) ? E.fmt(v0) : '—') + '</td><td class="n">' + d + '</td></tr>';
+  }
+  $('#aclTbl').innerHTML = '<table><thead><tr><th>' + (E.gran === 'dia' ? 'Dia (acumulado)' : 'Mês') + '</th><th class="n">' + esc(E.label) + '</th><th>Comparação</th><th class="n">' + esc(E.label) + '</th><th class="n">Variação</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  var note = E.gran === 'dia' ? 'Cada ponto é um dia, com o total acumulado desde o início de cada período: assim dá para ver se o período atual está andando à frente ou atrás da comparação. O dia 1 de um é comparado com o dia 1 do outro.' : 'Cada ponto é um mês, alinhados pela ordem: o 1º mês do período com o 1º mês da comparação. Meses incompletos usam a média por dia.';
+  if (!E.b.some(ok)) note = 'Não há dados de ' + E.G.n.toLowerCase() + ' no período de comparação escolhido, por isso a linha tracejada não aparece. ' + note;
+  $('#aclEvoNote').innerHTML = ic('info') + '<span>' + note + '</span>';
   drawEvo();
 }
 
@@ -1243,7 +1317,7 @@ function campsHTML(per) {
       var p = Math.round((1 - c.cost / c.prev) * 100);
       cmp = (p > 0 ? '<span class="badge ok">' + ic('check') + p + '% mais barato</span>' : p < 0 ? '<span class="badge warn">' + ic('alert') + Math.abs(p) + '% mais caro</span>' : '<span class="badge">Igual</span>') + '<span class="num">Antes: ' + money(c.prev) + '</span>';
     } else if (c.nova) cmp = '<span class="badge pk">Nova</span><span>Sem histórico</span>';
-    else cmp = '<span>Sem resultado no período anterior</span>';
+    else cmp = '<span>Sem resultado no período comparado</span>';
     return '<article class="camp"><div class="nm"><div class="t"><span>' + esc(c.nick) + '</span>' +
       '<button type="button" class="infobtn" data-i="' + idx + '" aria-expanded="false" aria-label="Ver o nome original da campanha" title="Ver o nome original">' + ic('info') + '</button>' +
       '<div class="pop" hidden><span class="cap">Nome original</span><code>' + esc(c.name) + '</code><button type="button" class="btn-outline" data-copy="' + idx + '">' + ic('copy') + '<span>Copiar nome</span></button></div></div>' +
@@ -1254,7 +1328,7 @@ function campsHTML(per) {
   }).join('');
   var tot = rows.reduce(function (a, c) { return a + c.inv; }, 0), top = rows.slice(0, 5).reduce(function (a, c) { return a + c.inv; }, 0);
   var foot = CAMP.all ? 'Todas as ' + rows.length + ' campanhas do período.' : (rows.length > 5 ? 'As cinco campanhas somam ' + money(top) + ' dos ' + money(tot) + ' investidos.' : 'Todas as campanhas do período.');
-  foot += ' Custos comparados com o período anterior quando a campanha já existia. O ícone ao lado do nome mostra o nome original.';
+  foot += ' Custos comparados com o período de comparação quando a campanha já existia. O ícone ao lado do nome mostra o nome original.';
   return '<section class="sec" aria-labelledby="h-camp"><div class="sec-head"><div class="t"><span class="section-label">Campanhas</span><h2 id="h-camp">Onde o investimento rendeu mais</h2></div><p class="hint">' + (CAMP.all ? 'Todas as campanhas' : 'As com maior investimento') + ' no período</p></div>' +
     '<div class="camps" id="aclCamps">' + h + '</div>' +
     (rows.length > 5 ? '<button type="button" class="btn-outline" id="aclAll" style="align-self:flex-start">' + (CAMP.all ? 'Mostrar só as cinco maiores' : 'Ver todas as campanhas (' + rows.length + ')') + '</button>' : '') +
@@ -1270,8 +1344,8 @@ function notesHTML(per) {
     var rk = F.resKey, c = F.cur[rk], p = F.prev[rk], cpr = c > 0 ? F.cur.spend / c : null, ppr = p > 0 ? F.prev.spend / p : null, nm = RNAME(F.f, false);
     if (!cpr || !ppr) return;
     var d = cpr / ppr - 1;
-    if (Math.abs(d) < 0.03) items.push({ ok: true, t: 'Custo por ' + nm + ' estável', d: money(cpr) + ', praticamente igual ao período anterior (' + money(ppr) + ').' });
-    else items.push({ ok: d < 0, t: 'Custo por ' + nm + (d < 0 ? ' caiu ' : ' subiu ') + Math.round(Math.abs(d) * 100) + '%', d: money(cpr) + ' por ' + nm + ', contra ' + money(ppr) + ' no período anterior.' });
+    if (Math.abs(d) < 0.03) items.push({ ok: true, t: 'Custo por ' + nm + ' estável', d: money(cpr) + ', praticamente igual ao período comparado (' + money(ppr) + ').' });
+    else items.push({ ok: d < 0, t: 'Custo por ' + nm + (d < 0 ? ' caiu ' : ' subiu ') + Math.round(Math.abs(d) * 100) + '%', d: money(cpr) + ' por ' + nm + ', contra ' + money(ppr) + ' no período comparado.' });
   });
   var main = FF[0], cand = rows.filter(function (c) { return c.f === main.f && c.res >= 3; }).sort(function (a, b) { return a.cost - b.cost; });
   if (cand.length > 1) items.push({ ok: true, t: cand[0].nick + ' é a mais eficiente', d: plural(cand[0].res, RNAME(main.f, false), RNAME(main.f)) + ' a ' + money(cand[0].cost) + ' cada, em ' + FNAME(main.f).toLowerCase() + '.' });
@@ -1291,7 +1365,7 @@ function notesHTML(per) {
   steps = steps.slice(0, 3);
   if (!items.length && !steps.length) return '';
   return '<section class="two" aria-label="Resumo e próximos passos"><div class="group"><h3>O que mudou</h3><ul class="list">' +
-    (items.length ? items.map(function (it) { return '<li>' + ic(it.ok ? 'check' : 'alert').replace('class="i"', 'class="i" style="color:var(--' + (it.ok ? 'success' : 'warning') + ');margin-top:2px"') + '<div class="body"><b>' + esc(it.t) + '</b><span>' + esc(it.d) + '</span></div></li>'; }).join('') : '<li><div class="body"><span>Sem base de comparação suficiente no período anterior.</span></div></li>') +
+    (items.length ? items.map(function (it) { return '<li>' + ic(it.ok ? 'check' : 'alert').replace('class="i"', 'class="i" style="color:var(--' + (it.ok ? 'success' : 'warning') + ');margin-top:2px"') + '<div class="body"><b>' + esc(it.t) + '</b><span>' + esc(it.d) + '</span></div></li>'; }).join('') : '<li><div class="body"><span>Sem base suficiente no período de comparação.</span></div></li>') +
     '</ul></div><div class="group"><h3>Próximos passos sugeridos</h3><ul class="list">' +
     steps.map(function (s) { return '<li><span class="circ" aria-hidden="true"></span><div class="body"><b>' + esc(s.t) + '</b><span>' + esc(s.d) + '</span></div></li>'; }).join('') + '</ul></div></section>';
 }
@@ -1310,8 +1384,24 @@ function headHTML(per) {
       var pp = periodFor(p[0]);
       return '<button type="button" role="option" data-p="' + p[0] + '" aria-selected="' + (STATE.preset === p[0]) + '"><span class="o"><b>' + p[1] + '</b><span class="num">' + rangeTxt(pp.from, pp.to) + '</span></span>' + ic('check') + '</button>';
     }).join('') + '<hr><div class="custom"><b style="font-weight:500">Escolher datas</b><div class="row"><input type="date" id="aclFrom" value="' + (STATE.preset === 'custom' ? per.from : '') + '"><input type="date" id="aclTo" value="' + (STATE.preset === 'custom' ? per.to : '') + '"></div><button type="button" class="btn-outline" id="aclApply">Aplicar</button></div></div></div>' +
-    '<p class="cmpline">Comparado com ' + rangeTxt(per.pFrom, per.pTo) + ' · média por dia</p></div></div></div>';
+    '<p class="cmpline">Período do relatório</p></div>' + cmpMenuHTML(per) + '</div></div>';
   return h;
+}
+function cmpMenuHTML(per) {
+  var c = STATE.cmp || { k: 'prev' }, base = _resolveBase(), yoy = { from: shiftYear(per.from, -1), to: shiftYear(per.to, -1) }, yoyOk = hasData(yoy.from, yoy.to);
+  var item = function (k, title, sub, sel, dis) {
+    return '<button type="button" role="option" data-c="' + k + '" aria-selected="' + sel + '"' + (dis ? ' disabled style="opacity:.45;cursor:not-allowed"' : '') + '><span class="o"><b>' + title + '</b><span class="num">' + sub + '</span></span>' + ic('check') + '</button>';
+  };
+  var months = dataMonths().map(function (ym) {
+    return '<button type="button" class="mo" data-cm="' + ym + '" aria-pressed="' + (c.k === 'month' && c.m === ym) + '">' + monthName(ym, true) + '</button>';
+  }).join('');
+  return '<div class="fwrap"><div class="pbox"><button class="period" id="aclCbtn" type="button" aria-haspopup="listbox" aria-expanded="false"><span class="rng">Comparar com</span><span>' + esc(cmpLabel(per)) + ' <span class="rng num">· ' + rangeTxt(per.pFrom, per.pTo) + '</span></span>' + ic('chev') + '</button>' +
+    '<div class="menu" id="aclCmenu" role="listbox" hidden>' +
+    item('prev', 'Período anterior', rangeTxt(base.pFrom, base.pTo) + (base.isMtd ? ' · mês anterior inteiro' : ' · mesmo número de dias'), c.k === 'prev', false) +
+    item('yoy', 'Mesmo período do ano passado', yoyOk ? rangeTxt(yoy.from, yoy.to) + '/' + yoy.from.slice(0, 4) : 'Ainda sem dados do ano passado', c.k === 'yoy', !yoyOk) +
+    '<hr><div class="custom"><b style="font-weight:500">Um mês específico</b><div class="months">' + months + '</div></div>' +
+    '<hr><div class="custom"><b style="font-weight:500">Escolher datas</b><div class="row"><input type="date" id="aclCFrom" value="' + (c.k === 'custom' ? c.from : '') + '"><input type="date" id="aclCTo" value="' + (c.k === 'custom' ? c.to : '') + '"></div><button type="button" class="btn-outline" id="aclCApply">Aplicar</button></div>' +
+    '</div></div><p class="cmpline">Comparação pela média por dia</p></div>';
 }
 function footHTML() {
   var plats = {}; STATE.rows.forEach(function (r) { plats[r.platform === 'google' ? 'Google Ads' : 'Meta Ads'] = 1; });
@@ -1324,7 +1414,7 @@ function render() {
   ROOT.innerHTML = SPRITE + '<main>' + headHTML(per) +
     '<section class="hero" aria-labelledby="h-neg"><div class="sec-head" style="margin-bottom:16px"><h2 id="h-neg">Camada de Negócios</h2></div><div class="glass hero-card">' + hero.html +
     (hero.notes.length ? hero.notes.map(function (n) { return '<div class="note-line">' + ic('info') + '<span>' + n + '</span></div>'; }).join('') : '') + '</div></section>' +
-    evoHTML() + funnelsHTML(per) + campsHTML(per) + notesHTML(per) + footHTML() + '</main>';
+    evoHTML(per) + funnelsHTML(per) + campsHTML(per) + notesHTML(per) + footHTML() + '</main>';
   bind(per);
   fillEvo();
   setTimeout(reportHeight, 30);
@@ -1340,7 +1430,16 @@ function bind(per) {
     b.onclick = function (e) { e.stopPropagation(); var open = m.hidden; closeAll(); m.hidden = !open; b.setAttribute('aria-expanded', String(open)); reportHeight(); };
     m.onclick = function (e) { e.stopPropagation(); };
   }
-  menu('#aclPbtn', '#aclPmenu'); menu('#aclUbtn', '#aclUmenu');
+  menu('#aclPbtn', '#aclPmenu'); menu('#aclUbtn', '#aclUmenu'); menu('#aclCbtn', '#aclCmenu');
+  function setCmp(c) { STATE.cmp = c; store.set('cmp', c); render(); }
+  $$('[data-c]').forEach(function (b) { b.onclick = function () { if (!b.disabled) setCmp({ k: b.dataset.c }); }; });
+  $$('[data-cm]').forEach(function (b) { b.onclick = function () { setCmp({ k: 'month', m: b.dataset.cm }); }; });
+  if ($('#aclCApply')) $('#aclCApply').onclick = function () {
+    var f = $('#aclCFrom').value, t = $('#aclCTo').value; if (!f || !t) return;
+    if (f > t) { var x = f; f = t; t = x; }
+    setCmp({ k: 'custom', from: f, to: t });
+  };
+  $$('[data-evog]').forEach(function (b) { b.onclick = function () { EVO.gran = b.dataset.evog; store.set('gran', EVO.gran); render(); }; });
   $$('[data-p]').forEach(function (b) { b.onclick = function () { STATE.preset = b.dataset.p; store.set('preset', STATE.preset); render(); }; });
   if ($('#aclApply')) $('#aclApply').onclick = function () {
     var f = $('#aclFrom').value, t = $('#aclTo').value;
